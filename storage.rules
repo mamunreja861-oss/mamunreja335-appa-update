@@ -1,0 +1,93 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default deny for all unspecified paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    function isVerifiedCloudUser() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isAllowedImageUpload() {
+      return request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType != null &&
+        request.resource.contentType.matches('image/(jpeg|jpg|png|webp)');
+    }
+
+    function isAllowedDocumentUpload() {
+      return request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType != null &&
+        request.resource.contentType.matches('(application/pdf|image/(jpeg|jpg|png|webp)|text/csv|application/vnd\\.openxmlformats-officedocument\\.spreadsheetml\\.sheet)');
+    }
+
+    // Customer profile photographs: authenticated team members only, strict 5MB image ceiling
+    match /customers/{customerId}/{fileName} {
+      allow read: if isVerifiedCloudUser() &&
+        customerId.matches('^[a-zA-Z0-9_-]{3,64}$');
+      allow create, update: if isVerifiedCloudUser() &&
+        customerId.matches('^[a-zA-Z0-9_-]{3,64}$') &&
+        isAllowedImageUpload();
+      allow delete: if isVerifiedCloudUser() &&
+        customerId.matches('^[a-zA-Z0-9_-]{3,64}$');
+    }
+
+    // Employee photographs: authenticated team members only, strict 5MB image ceiling
+    match /employees/{empId}/{fileName} {
+      allow read: if isVerifiedCloudUser() &&
+        empId.matches('^[a-zA-Z0-9_-]{2,64}$');
+      allow create, update: if isVerifiedCloudUser() &&
+        empId.matches('^[a-zA-Z0-9_-]{2,64}$') &&
+        isAllowedImageUpload();
+      allow delete: if isVerifiedCloudUser() &&
+        empId.matches('^[a-zA-Z0-9_-]{2,64}$');
+    }
+
+    // Center branding assets (logo, signature, stamp, static UPI QR)
+    match /companyAssets/{allPaths=**} {
+      allow read: if isVerifiedCloudUser();
+      allow create, update: if isVerifiedCloudUser() && isAllowedImageUpload();
+      allow delete: if isVerifiedCloudUser();
+    }
+
+    // Supporting application documents uploaded to Firebase Storage (nested customer/applicationNo folders supported)
+    match /applications/{allPaths=**} {
+      allow read: if isVerifiedCloudUser();
+      allow create, update: if isVerifiedCloudUser() && isAllowedDocumentUpload();
+      allow delete: if isVerifiedCloudUser();
+    }
+
+    // CSC order & customer portal private document vault uploads
+    match /csc-documents/{allPaths=**} {
+      allow read: if isVerifiedCloudUser();
+      allow create, update: if isVerifiedCloudUser() && isAllowedDocumentUpload();
+      allow delete: if isVerifiedCloudUser();
+    }
+
+    match /cscDocuments/{allPaths=**} {
+      allow read: if isVerifiedCloudUser();
+      allow create, update: if isVerifiedCloudUser() && isAllowedDocumentUpload();
+      allow delete: if isVerifiedCloudUser();
+    }
+
+    // Master Document Vault & general CRM uploads
+    match /documents/{allPaths=**} {
+      allow read: if isVerifiedCloudUser();
+      allow create, update: if isVerifiedCloudUser() && isAllowedDocumentUpload();
+      allow delete: if isVerifiedCloudUser();
+    }
+
+    // Financial Engine voucher/OCR attachments
+    match /financeAttachments/{allPaths=**} {
+      allow read: if isVerifiedCloudUser();
+      allow create, update: if isVerifiedCloudUser() && isAllowedDocumentUpload();
+      allow delete: if isVerifiedCloudUser();
+    }
+  }
+}
